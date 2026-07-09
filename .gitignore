@@ -6,6 +6,10 @@ __pycache__/
 venv/
 .env
 
+# Generated local data and outputs
+data/
+results/
+
 # Model checkpoints
 *.pt
 *.pth
