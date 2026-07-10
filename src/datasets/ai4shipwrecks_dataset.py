@@ -1,10 +1,12 @@
 """AI4Shipwrecks dataset loader.
 
-Searches recursively for image files and pairs each image with a matching mask/label file.
+This loader tries to pair sonar images with mask/label files recursively.
+It is intentionally flexible because downloaded datasets often use different folder names.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import cv2
@@ -12,8 +14,20 @@ import torch
 from torch.utils.data import Dataset
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
-MASK_WORDS = ("mask", "label", "labels", "annotation", "annotations", "segmentation", "gt")
-IMAGE_WORDS = ("image", "images", "sonar", "sss")
+MASK_WORDS = (
+    "mask",
+    "masks",
+    "label",
+    "labels",
+    "annotation",
+    "annotations",
+    "segmentation",
+    "segmentations",
+    "gt",
+    "groundtruth",
+    "ground_truth",
+)
+IMAGE_WORDS = ("image", "images", "img", "sonar", "sss")
 
 
 def _is_image_file(path: Path) -> bool:
@@ -30,34 +44,55 @@ def _looks_like_image(path: Path) -> bool:
     return any(word in text for word in IMAGE_WORDS) and not _looks_like_mask(path)
 
 
-def _clean_stem(stem: str) -> str:
-    s = stem.lower()
-    for token in ["_mask", "-mask", " mask", "_label", "-label", " label", "_gt", "-gt", " gt"]:
-        s = s.replace(token, "")
-    for token in ["_image", "-image", " image", "_img", "-img", " img"]:
-        s = s.replace(token, "")
-    return s
+def _normalize_key(path: Path) -> str:
+    text = path.stem.lower()
+    text = re.sub(r"(mask|masks|label|labels|annotation|annotations|segmentation|segmentations|gt|groundtruth|ground_truth)", "", text)
+    text = re.sub(r"(image|images|img|sonar|sss)", "", text)
+    text = re.sub(r"[^a-z0-9]+", "", text)
+    return text
 
 
 def find_pairs(root: str | Path) -> list[tuple[Path, Path]]:
     root = Path(root)
+    if not root.exists():
+        raise FileNotFoundError(f"Data directory does not exist: {root}")
+
     files = [p for p in root.rglob("*") if p.is_file() and _is_image_file(p)]
+    if not files:
+        raise FileNotFoundError(f"No image files found under: {root}")
 
     mask_files = [p for p in files if _looks_like_mask(p)]
     image_files = [p for p in files if p not in mask_files and _looks_like_image(p)]
+
     if not image_files:
         image_files = [p for p in files if p not in mask_files]
 
-    mask_by_stem = {_clean_stem(p.stem): p for p in mask_files}
-    pairs: list[tuple[Path, Path]] = []
+    mask_by_key: dict[str, Path] = {}
+    for mask in mask_files:
+        key = _normalize_key(mask)
+        if key:
+            mask_by_key[key] = mask
 
-    for image_path in image_files:
-        mask_path = mask_by_stem.get(_clean_stem(image_path.stem))
-        if mask_path is not None:
-            pairs.append((image_path, mask_path))
+    pairs: list[tuple[Path, Path]] = []
+    used_masks: set[Path] = set()
+
+    for image in image_files:
+        key = _normalize_key(image)
+        mask = mask_by_key.get(key)
+        if mask is not None and mask not in used_masks:
+            pairs.append((image, mask))
+            used_masks.add(mask)
+
+    # Fallback: if one image folder and one mask folder have the same number of files,
+    # pair them by sorted order. This is common in simple segmentation datasets.
+    if not pairs and image_files and mask_files and len(image_files) == len(mask_files):
+        pairs = list(zip(sorted(image_files), sorted(mask_files)))
 
     if not pairs:
-        raise FileNotFoundError("No image-mask pairs found. Check folder names and mask filenames.")
+        raise FileNotFoundError(
+            f"No image-mask pairs found. Found {len(files)} image-like files, "
+            f"{len(image_files)} possible images, and {len(mask_files)} possible masks."
+        )
 
     return sorted(pairs, key=lambda x: str(x[0]))
 
