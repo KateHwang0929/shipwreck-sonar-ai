@@ -30,7 +30,6 @@
 └── database/
     ├── README.md
     ├── source_metadata.csv
-    ├── source_metadata.json
     ├── schema.sql
     ├── build_shipwreck_db.py
     └── generated/
