@@ -1,0 +1,84 @@
+{
+  "name": "scene_000835",
+  "world": "KoreanWreckWorld",
+  "package_name": "KoreanWrecks",
+  "main_agent": "auv0",
+  "ticks_per_sec": 30,
+  "frames_per_sec": false,
+  "agents": [
+    {
+      "agent_name": "auv0",
+      "agent_type": "HoveringAUV",
+      "control_scheme": 0,
+      "location": [
+        20.80974,
+        -2.02304,
+        -11.81184
+      ],
+      "rotation": [
+        -2.29912,
+        -18.99444,
+        171.65912
+      ],
+      "sensors": [
+        {
+          "sensor_type": "RGBCamera",
+          "sensor_name": "RGB",
+          "socket": "CameraSocket",
+          "Hz": 5,
+          "configuration": {
+            "CaptureWidth": 512,
+            "CaptureHeight": 512
+          }
+        },
+        {
+          "sensor_type": "DepthCamera",
+          "sensor_name": "Depth",
+          "socket": "CameraSocket",
+          "Hz": 5,
+          "configuration": {
+            "CaptureWidth": 512,
+            "CaptureHeight": 512
+          }
+        },
+        {
+          "sensor_type": "SemanticSegmentationCamera",
+          "sensor_name": "Semantic",
+          "socket": "CameraSocket",
+          "Hz": 5,
+          "configuration": {
+            "CaptureWidth": 512,
+            "CaptureHeight": 512
+          }
+        },
+        {
+          "sensor_type": "RaycastImagingSonar",
+          "sensor_name": "Sonar",
+          "socket": "SonarSocket",
+          "Hz": 5,
+          "configuration": {
+            "RangeBins": 512,
+            "AzimuthBins": 512,
+            "AzimuthRayCount": 500,
+            "ElevationRayCount": 100,
+            "RangeMin": 0.5,
+            "RangeMax": 35.81929,
+            "Elevation": 17.77426,
+            "Azimuth": 94.88018,
+            "MultSigma": 0.048118,
+            "AddSigma": 0.034091,
+            "MultiPath": false,
+            "ViewRegion": false,
+            "WaterDensity": 997,
+            "WaterSpeedSound": 1480,
+            "IgnorePlants": false
+          }
+        },
+        {
+          "sensor_type": "PoseSensor",
+          "sensor_name": "Pose"
+        }
+      ]
+    }
+  ]
+}

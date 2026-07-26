@@ -1,0 +1,64 @@
+{
+  "scene_id": "scene_000772",
+  "asset": {
+    "asset_id": "wando_reconstruction",
+    "wreck_id": "wando_ship",
+    "name_ko": "완도선",
+    "variant": "full_reconstruction",
+    "fbx_path": "3d modeling/완도선/완도선 복원체.fbx",
+    "fbx_exists": true,
+    "unreal_actor_name": "BP_WandoReconstruction",
+    "semantic_label": "shipwreck"
+  },
+  "world": {
+    "package_name": "KoreanWrecks",
+    "world_name": "KoreanWreckWorld",
+    "wreck_location_m": [
+      0.0,
+      0.0,
+      -18.0
+    ],
+    "wreck_rotation_rpy_deg": [
+      -4.53096,
+      0.50247,
+      169.78984
+    ],
+    "visibility_m": 17.27476,
+    "turbidity": 0.10469,
+    "current_speed_mps": 1.12544,
+    "sediment_burial_fraction": 0.04455
+  },
+  "agent": {
+    "name": "auv0",
+    "type": "HoveringAUV",
+    "location_m": [
+      12.81155,
+      -2.63901,
+      -12.05082
+    ],
+    "rotation_rpy_deg": [
+      -0.30491,
+      -22.38634,
+      169.77274
+    ],
+    "distance_to_wreck_m": 13.08053,
+    "height_above_wreck_m": 5.94918
+  },
+  "sensors": {
+    "capture_width": 512,
+    "capture_height": 512,
+    "hz": 5,
+    "sonar": {
+      "range_bins": 512,
+      "azimuth_bins": 512,
+      "azimuth_ray_count": 500,
+      "elevation_ray_count": 100,
+      "range_min_m": 0.5,
+      "range_max_m": 43.20973,
+      "azimuth_deg": 104.45288,
+      "elevation_deg": 25.4544,
+      "add_sigma": 0.043974,
+      "mult_sigma": 0.074775
+    }
+  }
+}

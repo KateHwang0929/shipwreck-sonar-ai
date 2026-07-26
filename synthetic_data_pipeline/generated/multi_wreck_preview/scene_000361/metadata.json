@@ -1,0 +1,64 @@
+{
+  "scene_id": "scene_000361",
+  "asset": {
+    "asset_id": "sibidongpado_reconstruction",
+    "wreck_id": "sibidongpado_ship",
+    "name_ko": "십이동파도선",
+    "variant": "full_reconstruction",
+    "fbx_path": "3d modeling/십이동파도선/십이동파도선 full.fbx",
+    "fbx_exists": true,
+    "unreal_actor_name": "BP_SibidongpadoReconstruction",
+    "semantic_label": "shipwreck"
+  },
+  "world": {
+    "package_name": "KoreanWrecks",
+    "world_name": "KoreanWreckWorld",
+    "wreck_location_m": [
+      0.0,
+      0.0,
+      -18.0
+    ],
+    "wreck_rotation_rpy_deg": [
+      5.41937,
+      11.55914,
+      224.37083
+    ],
+    "visibility_m": 15.83554,
+    "turbidity": 0.57108,
+    "current_speed_mps": 1.1374,
+    "sediment_burial_fraction": 0.2004
+  },
+  "agent": {
+    "name": "auv0",
+    "type": "HoveringAUV",
+    "location_m": [
+      -22.96021,
+      3.00313,
+      -8.83636
+    ],
+    "rotation_rpy_deg": [
+      -0.10799,
+      -20.90489,
+      -11.33672
+    ],
+    "distance_to_wreck_m": 23.15577,
+    "height_above_wreck_m": 9.16364
+  },
+  "sensors": {
+    "capture_width": 512,
+    "capture_height": 512,
+    "hz": 5,
+    "sonar": {
+      "range_bins": 512,
+      "azimuth_bins": 512,
+      "azimuth_ray_count": 500,
+      "elevation_ray_count": 100,
+      "range_min_m": 0.5,
+      "range_max_m": 35.48297,
+      "azimuth_deg": 95.76663,
+      "elevation_deg": 19.9257,
+      "add_sigma": 0.032588,
+      "mult_sigma": 0.066993
+    }
+  }
+}
