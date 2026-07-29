@@ -1,0 +1,64 @@
+{
+  "scene_id": "scene_000864",
+  "asset": {
+    "asset_id": "dallido_reconstruction",
+    "wreck_id": "dallido_ship",
+    "name_ko": "달리도선",
+    "variant": "estimated_reconstruction",
+    "fbx_path": "3d modeling/달리도선/달리도선_복원+3D모델링.fbx",
+    "fbx_exists": true,
+    "unreal_actor_name": "BP_DallidoReconstruction",
+    "semantic_label": "shipwreck"
+  },
+  "world": {
+    "package_name": "KoreanWrecks",
+    "world_name": "KoreanWreckWorld",
+    "wreck_location_m": [
+      0.0,
+      0.0,
+      -15.0
+    ],
+    "wreck_rotation_rpy_deg": [
+      4.70718,
+      4.37625,
+      49.14522
+    ],
+    "visibility_m": 17.73541,
+    "turbidity": 0.98314,
+    "current_speed_mps": 0.81256,
+    "sediment_burial_fraction": 0.33681
+  },
+  "agent": {
+    "name": "auv0",
+    "type": "HoveringAUV",
+    "location_m": [
+      13.71961,
+      -12.49907,
+      -7.2177
+    ],
+    "rotation_rpy_deg": [
+      -1.29566,
+      -25.22804,
+      136.65635
+    ],
+    "distance_to_wreck_m": 18.55948,
+    "height_above_wreck_m": 7.7823
+  },
+  "sensors": {
+    "capture_width": 512,
+    "capture_height": 512,
+    "hz": 5,
+    "sonar": {
+      "range_bins": 512,
+      "azimuth_bins": 512,
+      "azimuth_ray_count": 500,
+      "elevation_ray_count": 100,
+      "range_min_m": 0.5,
+      "range_max_m": 37.45628,
+      "azimuth_deg": 93.66401,
+      "elevation_deg": 25.67691,
+      "add_sigma": 0.015865,
+      "mult_sigma": 0.066958
+    }
+  }
+}

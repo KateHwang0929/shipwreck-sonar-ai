@@ -1,0 +1,64 @@
+{
+  "scene_id": "scene_000480",
+  "asset": {
+    "asset_id": "mado1_remains",
+    "wreck_id": "mado1_ship",
+    "name_ko": "마도1호선",
+    "variant": "remaining_hull",
+    "fbx_path": "3d modeling/마도1호선/마도1호선+잔존선체.fbx",
+    "fbx_exists": true,
+    "unreal_actor_name": "BP_Mado1Remains",
+    "semantic_label": "shipwreck"
+  },
+  "world": {
+    "package_name": "KoreanWrecks",
+    "world_name": "KoreanWreckWorld",
+    "wreck_location_m": [
+      0.0,
+      0.0,
+      -18.0
+    ],
+    "wreck_rotation_rpy_deg": [
+      -0.63931,
+      -3.93676,
+      124.32861
+    ],
+    "visibility_m": 2.31939,
+    "turbidity": 0.83685,
+    "current_speed_mps": 0.31821,
+    "sediment_burial_fraction": 0.28332
+  },
+  "agent": {
+    "name": "auv0",
+    "type": "HoveringAUV",
+    "location_m": [
+      -13.56168,
+      0.55135,
+      -13.10972
+    ],
+    "rotation_rpy_deg": [
+      1.60552,
+      -21.17618,
+      -4.02977
+    ],
+    "distance_to_wreck_m": 13.57288,
+    "height_above_wreck_m": 4.89028
+  },
+  "sensors": {
+    "capture_width": 512,
+    "capture_height": 512,
+    "hz": 5,
+    "sonar": {
+      "range_bins": 512,
+      "azimuth_bins": 512,
+      "azimuth_ray_count": 500,
+      "elevation_ray_count": 100,
+      "range_min_m": 0.5,
+      "range_max_m": 30.50458,
+      "azimuth_deg": 128.4976,
+      "elevation_deg": 17.53952,
+      "add_sigma": 0.015027,
+      "mult_sigma": 0.021587
+    }
+  }
+}

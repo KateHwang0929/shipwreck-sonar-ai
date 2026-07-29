@@ -1,0 +1,64 @@
+{
+  "scene_id": "scene_000732",
+  "asset": {
+    "asset_id": "sinan_reconstruction",
+    "wreck_id": "sinan_ship",
+    "name_ko": "신안선",
+    "variant": "estimated_reconstruction",
+    "fbx_path": "3d modeling/신안선/신안선.fbx",
+    "fbx_exists": true,
+    "unreal_actor_name": "BP_SinanReconstruction",
+    "semantic_label": "shipwreck"
+  },
+  "world": {
+    "package_name": "KoreanWrecks",
+    "world_name": "KoreanWreckWorld",
+    "wreck_location_m": [
+      0.0,
+      0.0,
+      -25.0
+    ],
+    "wreck_rotation_rpy_deg": [
+      -0.4607,
+      9.15327,
+      146.47003
+    ],
+    "visibility_m": 17.02664,
+    "turbidity": 0.17629,
+    "current_speed_mps": 0.15016,
+    "sediment_burial_fraction": 0.15131
+  },
+  "agent": {
+    "name": "auv0",
+    "type": "HoveringAUV",
+    "location_m": [
+      5.88467,
+      -23.21511,
+      -23.11855
+    ],
+    "rotation_rpy_deg": [
+      -0.25062,
+      -1.62488,
+      104.3748
+    ],
+    "distance_to_wreck_m": 23.94933,
+    "height_above_wreck_m": 1.88145
+  },
+  "sensors": {
+    "capture_width": 512,
+    "capture_height": 512,
+    "hz": 5,
+    "sonar": {
+      "range_bins": 512,
+      "azimuth_bins": 512,
+      "azimuth_ray_count": 500,
+      "elevation_ray_count": 100,
+      "range_min_m": 0.5,
+      "range_max_m": 27.7172,
+      "azimuth_deg": 92.25916,
+      "elevation_deg": 18.9084,
+      "add_sigma": 0.004787,
+      "mult_sigma": 0.013099
+    }
+  }
+}
