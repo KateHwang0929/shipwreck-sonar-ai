@@ -1,0 +1,65 @@
+name: Build shipwreck size and orientation database
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-shipwreck-size-orientation.yml"
+      - "database/scan_shipwreck_fbx.py"
+      - "database/shipwreck_size_orientation_metadata.csv"
+      - "3d modeling/shipwreck/original_models/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shipwreck-size-orientation-database
+  cancel-in-progress: false
+
+jobs:
+  measure-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out required repository paths
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            database
+            3d modeling/shipwreck/original_models
+          sparse-checkout-cone-mode: true
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq blender
+          blender --version
+
+      - name: Measure FBX models
+        run: |
+          blender --background \
+            --python database/scan_shipwreck_fbx.py -- \
+            --models-dir "3d modeling/shipwreck/original_models" \
+            --metadata database/shipwreck_size_orientation_metadata.csv \
+            --output-csv database/generated/shipwreck_size_orientation.csv \
+            --output-json database/generated/shipwreck_size_orientation.json
+
+      - name: Commit refreshed database
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            database/generated/shipwreck_size_orientation.csv \
+            database/generated/shipwreck_size_orientation.json
+          if git diff --cached --quiet; then
+            echo "Database is already current."
+            exit 0
+          fi
+          git commit -m "Refresh shipwreck size and orientation database"
+          git pull --rebase origin main
+          git push
