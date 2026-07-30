@@ -1,0 +1,78 @@
+name: Generate ceramic FBX with Meshy
+
+on:
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "Ceramic group, such as mado18-28, or all"
+        required: true
+        default: "all"
+        type: string
+      overwrite:
+        description: "Regenerate FBX files that already exist"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-ceramic-fbx
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify Meshy secret
+        env:
+          MESHY_API_KEY: ${{ secrets.MESHY_API_KEY }}
+        run: |
+          if [ -z "$MESHY_API_KEY" ]; then
+            echo "Add MESHY_API_KEY under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Generate FBX models
+        env:
+          MESHY_API_KEY: ${{ secrets.MESHY_API_KEY }}
+          SELECTED_GROUP: ${{ inputs.group }}
+          OVERWRITE: ${{ inputs.overwrite }}
+        run: |
+          args=(
+            --repo "$GITHUB_REPOSITORY"
+            --ref "$GITHUB_SHA"
+          )
+          if [ "$SELECTED_GROUP" != "all" ]; then
+            args+=(--only "$SELECTED_GROUP")
+          fi
+          if [ "$OVERWRITE" = "true" ]; then
+            args+=(--overwrite)
+          fi
+          python "3d modeling/ceramics/generate_meshy_models.py" "${args[@]}"
+
+      - name: Commit generated assets
+        run: |
+          git lfs install
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "3d modeling/ceramics/preview_images"
+          if git diff --cached --quiet; then
+            echo "No new generated files to commit."
+            exit 0
+          fi
+          git commit -m "Generate ceramic FBX models with Meshy"
+          git push
