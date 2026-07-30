@@ -1,0 +1,65 @@
+name: Build shipwreck asset size and orientation database
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-shipwreck-asset-database.yml"
+      - "3d modeling/shipwreck/asset_database/scan_fbx_size_orientation.py"
+      - "3d modeling/shipwreck/asset_database/shipwreck_size_orientation.csv"
+      - "3d modeling/shipwreck/original_models/**"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shipwreck-asset-size-orientation
+  cancel-in-progress: false
+
+jobs:
+  scan-fbx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out shipwreck assets
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            3d modeling/shipwreck/asset_database
+            3d modeling/shipwreck/original_models
+          sparse-checkout-cone-mode: true
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq blender
+          blender --version
+
+      - name: Measure models and calculate orientation
+        run: |
+          blender --background \
+            --python "3d modeling/shipwreck/asset_database/scan_fbx_size_orientation.py" -- \
+            --models-dir "3d modeling/shipwreck/original_models" \
+            --metadata "3d modeling/shipwreck/asset_database/shipwreck_size_orientation.csv" \
+            --output-csv "3d modeling/shipwreck/asset_database/shipwreck_size_orientation.csv" \
+            --output-json "3d modeling/shipwreck/asset_database/shipwreck_size_orientation.json"
+
+      - name: Commit refreshed database
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            "3d modeling/shipwreck/asset_database/shipwreck_size_orientation.csv" \
+            "3d modeling/shipwreck/asset_database/shipwreck_size_orientation.json"
+          if git diff --cached --quiet; then
+            echo "Database is already current."
+            exit 0
+          fi
+          git commit -m "Refresh shipwreck asset size and orientation database"
+          git pull --rebase origin main
+          git push
