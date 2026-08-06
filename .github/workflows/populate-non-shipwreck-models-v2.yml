@@ -1,0 +1,213 @@
+name: Populate non-shipwreck models V2
+run-name: "Populate Models V2 #${{ github.run_number }}"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/populate-non-shipwreck-models-v2.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: populate-non-shipwreck-models-v2
+  cancel-in-progress: false
+
+jobs:
+  populate-models-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      BLENDER_PYTHON_LIBS: ${{ github.workspace }}/.blender-python-libs
+      BLENDER_EXTRA_PYTHONPATH: ${{ github.workspace }}/.blender-python-libs
+      PYTHONPATH: ${{ github.workspace }}/.blender-python-libs
+      LIBGL_ALWAYS_SOFTWARE: "1"
+
+    steps:
+      - name: Check out model catalog branch
+        uses: actions/checkout@v5
+        with:
+          ref: add-underwater-object-catalog
+          lfs: true
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: "3d modeling/non_shipwreck_object_catalog/requirements.txt"
+
+      - name: Install downloader dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r "3d modeling/non_shipwreck_object_catalog/requirements.txt"
+
+      - name: Install Blender runtime and NumPy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender libgl1-mesa-dri libegl1 git-lfs
+          rm -rf "$BLENDER_PYTHON_LIBS"
+          python -m pip install \
+            --only-binary=:all: \
+            --target "$BLENDER_PYTHON_LIBS" \
+            "numpy==1.26.4"
+
+          blender --version
+          blender \
+            --background \
+            --factory-startup \
+            --python-use-system-env \
+            --python-exit-code 1 \
+            --python-expr "import sys, numpy as np, bpy; print('Blender Python:', sys.version); print('Blender NumPy:', np.__version__); print('Blender API:', bpy.app.version_string)"
+
+      - name: Verify Sketchfab secret
+        env:
+          SKETCHFAB_TOKEN: ${{ secrets.SKETCHFAB_TOKEN }}
+        run: |
+          if [ -z "$SKETCHFAB_TOKEN" ]; then
+            echo "::error::Repository secret SKETCHFAB_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Download Sketchfab models
+        env:
+          SKETCHFAB_TOKEN: ${{ secrets.SKETCHFAB_TOKEN }}
+        run: |
+          python "3d modeling/non_shipwreck_object_catalog/download_sketchfab_models.py" \
+            --repo-root . \
+            --catalog "3d modeling/non_shipwreck_object_catalog/model_catalog.csv" \
+            --overwrite
+
+      - name: Convert models to FBX and render previews
+        run: |
+          blender \
+            --background \
+            --factory-startup \
+            --python-use-system-env \
+            --python-exit-code 1 \
+            --python "3d modeling/non_shipwreck_object_catalog/blender_convert_and_render.py" \
+            -- \
+            --repo-root . \
+            --catalog "3d modeling/non_shipwreck_object_catalog/model_catalog.csv" \
+            --overwrite
+
+      - name: Validate and stage generated assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+
+          python - <<'PY'
+          import csv
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          catalog = root / "3d modeling/non_shipwreck_object_catalog/model_catalog.csv"
+          report = root / "3d modeling/non_shipwreck_object_catalog/validation_report.csv"
+
+          with catalog.open(newline="", encoding="utf-8-sig") as stream:
+              rows = list(csv.DictReader(stream))
+
+          errors = []
+          stage_paths = []
+
+          for row in rows:
+              category = row["category"]
+              fbx_rel = row["target_fbx"]
+              png_rel = row["target_preview"]
+              attribution_rel = f"3d modeling/{category}/ATTRIBUTION.md"
+
+              fbx = root / fbx_rel
+              png = root / png_rel
+              attribution = root / attribution_rel
+
+              if not fbx.is_file() or fbx.stat().st_size < 1024:
+                  errors.append(f"{category}: missing or empty FBX: {fbx_rel}")
+              else:
+                  with fbx.open("rb") as stream:
+                      if not stream.read(23).startswith(b"Kaydara FBX Binary"):
+                          errors.append(f"{category}: invalid binary FBX header: {fbx_rel}")
+
+              if not png.is_file() or png.stat().st_size < 256:
+                  errors.append(f"{category}: missing or empty PNG: {png_rel}")
+              else:
+                  with png.open("rb") as stream:
+                      if stream.read(8) != b"\x89PNG\r\n\x1a\n":
+                          errors.append(f"{category}: invalid PNG header: {png_rel}")
+
+              if not attribution.is_file():
+                  errors.append(f"{category}: missing attribution: {attribution_rel}")
+
+              stage_paths.extend([fbx_rel, png_rel, attribution_rel])
+
+          if not report.is_file():
+              errors.append("missing validation report")
+          else:
+              with report.open(newline="", encoding="utf-8") as stream:
+                  report_rows = list(csv.DictReader(stream))
+              report_by_category = {row["category"]: row for row in report_rows}
+              for row in rows:
+                  status = report_by_category.get(row["category"], {}).get("status")
+                  if status not in {"ok", "review_materials"}:
+                      errors.append(f"{row['category']}: conversion status is {status!r}")
+
+          if errors:
+              for error in errors:
+                  print(f"::error::{error}")
+              sys.exit(1)
+
+          for path in stage_paths:
+              subprocess.run(["git", "add", "--", path], check=True)
+
+          subprocess.run(
+              [
+                  "git",
+                  "add",
+                  "--force",
+                  "--",
+                  "3d modeling/non_shipwreck_object_catalog/validation_report.csv",
+              ],
+              check=True,
+          )
+
+          if (root / ".gitattributes").is_file():
+              subprocess.run(["git", "add", "--", ".gitattributes"], check=True)
+
+          print(f"Validated and staged {len(rows)} FBX files and {len(rows)} PNG previews.")
+          PY
+
+      - name: Commit and push generated assets
+        run: |
+          git status --short
+          git lfs ls-files
+
+          if git diff --cached --quiet; then
+            echo "No generated asset changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Populate non-shipwreck Sketchfab models"
+          git push origin HEAD:add-underwater-object-catalog
+
+      - name: Write success summary
+        run: |
+          {
+            echo "## V2 completed successfully"
+            echo
+            echo "- Generated and validated 16 FBX models"
+            echo "- Generated and validated 16 transparent PNG previews"
+            echo "- Pushed outputs to \`add-underwater-object-catalog\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary files
+        if: always()
+        run: |
+          rm -rf "3d modeling/non_shipwreck_object_catalog/downloads"
+          rm -rf "$BLENDER_PYTHON_LIBS"
