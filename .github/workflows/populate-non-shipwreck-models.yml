@@ -18,7 +18,7 @@ jobs:
           ref: add-underwater-object-catalog
           lfs: true
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -28,12 +28,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r "3d modeling/non_shipwreck_object_catalog/requirements.txt"
 
-      - name: Install Blender and NumPy
+      - name: Install Blender and Blender-compatible NumPy
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender python3-numpy
+          sudo apt-get install -y blender
+          python -m pip install --target "$GITHUB_WORKSPACE/.blender-python-libs" "numpy==1.26.4"
           blender --version
-          blender --background --python-expr "import numpy as np; print('Blender NumPy:', np.__version__)"
+          PYTHONPATH="$GITHUB_WORKSPACE/.blender-python-libs" blender --background --python-expr "import sys, numpy as np; print('Blender Python:', sys.version); print('Blender NumPy:', np.__version__)"
 
       - name: Verify Sketchfab secret
         env:
@@ -53,6 +54,8 @@ jobs:
             --catalog "3d modeling/non_shipwreck_object_catalog/model_catalog.csv"
 
       - name: Convert models to FBX and render previews
+        env:
+          PYTHONPATH: ${{ github.workspace }}/.blender-python-libs
         run: |
           blender --background \
             --python "3d modeling/non_shipwreck_object_catalog/blender_convert_and_render.py" \
@@ -61,8 +64,11 @@ jobs:
             --catalog "3d modeling/non_shipwreck_object_catalog/model_catalog.csv" \
             --overwrite
 
-      - name: Remove temporary downloads
-        run: rm -rf "3d modeling/non_shipwreck_object_catalog/downloads"
+      - name: Remove temporary files
+        if: always()
+        run: |
+          rm -rf "3d modeling/non_shipwreck_object_catalog/downloads"
+          rm -rf "$GITHUB_WORKSPACE/.blender-python-libs"
 
       - name: Commit generated assets to catalog branch
         run: |
