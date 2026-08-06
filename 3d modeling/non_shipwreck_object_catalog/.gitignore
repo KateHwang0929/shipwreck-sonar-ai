@@ -1,0 +1,4 @@
+downloads/
+validation_report.csv
+__pycache__/
+*.pyc
