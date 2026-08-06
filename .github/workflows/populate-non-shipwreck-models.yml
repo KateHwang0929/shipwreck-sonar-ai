@@ -28,11 +28,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r "3d modeling/non_shipwreck_object_catalog/requirements.txt"
 
-      - name: Install Blender
+      - name: Install Blender and NumPy
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender
+          sudo apt-get install -y blender python3-numpy
           blender --version
+          blender --background --python-expr "import numpy as np; print('Blender NumPy:', np.__version__)"
 
       - name: Verify Sketchfab secret
         env:
