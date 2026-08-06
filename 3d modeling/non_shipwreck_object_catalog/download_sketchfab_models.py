@@ -10,6 +10,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ import requests
 
 API_ROOT = "https://api.sketchfab.com/v3"
 CHUNK_SIZE = 1024 * 1024
+MAX_RETRIES = 7
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,15 +47,41 @@ def safe_extract(archive: zipfile.ZipFile, destination: Path) -> None:
     archive.extractall(destination)
 
 
+def retry_delay(response: requests.Response, attempt: int) -> float:
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return min(max(float(retry_after), 1.0), 120.0)
+        except ValueError:
+            pass
+    return min(2.0 ** attempt, 60.0)
+
+
 def request_download_metadata(
     session: requests.Session, uid: str
 ) -> dict[str, Any]:
-    response = session.get(f"{API_ROOT}/models/{uid}/download", timeout=60)
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, dict):
-        raise ValueError(f"Unexpected download response for {uid}")
-    return payload
+    url = f"{API_ROOT}/models/{uid}/download"
+    for attempt in range(MAX_RETRIES):
+        response = session.get(url, timeout=60)
+        if response.status_code == 429 or 500 <= response.status_code < 600:
+            if attempt == MAX_RETRIES - 1:
+                response.raise_for_status()
+            delay = retry_delay(response, attempt)
+            print(
+                f"[retry] Sketchfab returned {response.status_code} for {uid}; "
+                f"waiting {delay:.0f}s",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+            continue
+
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError(f"Unexpected download response for {uid}")
+        return payload
+
+    raise RuntimeError(f"Unable to obtain download metadata for {uid}")
 
 
 def choose_package(payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -65,15 +93,35 @@ def choose_package(payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     raise ValueError(f"No glTF/GLB package returned. Available keys: {available}")
 
 
-def download_file(
-    session: requests.Session, url: str, destination: Path
-) -> None:
-    with session.get(url, stream=True, timeout=(30, 300)) as response:
-        response.raise_for_status()
-        with destination.open("wb") as stream:
-            for chunk in response.iter_content(CHUNK_SIZE):
-                if chunk:
-                    stream.write(chunk)
+def download_file(url: str, destination: Path) -> None:
+    """Download a pre-signed S3 archive without Sketchfab Authorization headers.
+
+    The URL already contains AWS query-string credentials. Reusing the
+    authenticated Sketchfab Session would add an Authorization header and make
+    S3 reject the request because two authentication mechanisms are present.
+    """
+    for attempt in range(MAX_RETRIES):
+        with requests.get(url, stream=True, timeout=(30, 300)) as response:
+            if response.status_code == 429 or 500 <= response.status_code < 600:
+                if attempt == MAX_RETRIES - 1:
+                    response.raise_for_status()
+                delay = retry_delay(response, attempt)
+                print(
+                    f"[retry] archive server returned {response.status_code}; "
+                    f"waiting {delay:.0f}s",
+                    file=sys.stderr,
+                )
+                time.sleep(delay)
+                continue
+
+            response.raise_for_status()
+            with destination.open("wb") as stream:
+                for chunk in response.iter_content(CHUNK_SIZE):
+                    if chunk:
+                        stream.write(chunk)
+            return
+
+    raise RuntimeError(f"Unable to download archive: {url}")
 
 
 def find_scene_file(folder: Path) -> Path:
@@ -88,7 +136,7 @@ def find_scene_file(folder: Path) -> Path:
 
 def write_attribution(category_root: Path, row: dict[str, str]) -> None:
     text = (
-        f"# Source attribution\n\n"
+        "# Source attribution\n\n"
         f"- Object: {row['object_name']}\n"
         f"- Author: {row['author']}\n"
         f"- Sketchfab model: {row['model_url']}\n"
@@ -125,8 +173,8 @@ def main() -> int:
     )
     download_root.mkdir(parents=True, exist_ok=True)
 
-    session = requests.Session()
-    session.headers.update(
+    api_session = requests.Session()
+    api_session.headers.update(
         {
             "Authorization": f"{args.auth_scheme} {args.token}",
             "User-Agent": "shipwreck-sonar-ai/underwater-object-catalog",
@@ -134,7 +182,7 @@ def main() -> int:
     )
 
     status: list[dict[str, Any]] = []
-    for row in rows:
+    for index, row in enumerate(rows):
         category = row["category"]
         uid = row["sketchfab_uid"]
         category_root = repo_root / "3d modeling" / category
@@ -155,16 +203,20 @@ def main() -> int:
                 if scene.exists():
                     print(f"[skip] {category}: {scene}")
                     status.append(
-                        {"category": category, "status": "already_downloaded", "scene": str(scene)}
+                        {
+                            "category": category,
+                            "status": "already_downloaded",
+                            "scene": str(scene),
+                        }
                     )
                     continue
 
-            payload = request_download_metadata(session, uid)
+            payload = request_download_metadata(api_session, uid)
             package_type, package = choose_package(payload)
 
             with tempfile.TemporaryDirectory(prefix=f"sketchfab-{uid}-") as temp:
                 archive_path = Path(temp) / f"{uid}.zip"
-                download_file(session, package["url"], archive_path)
+                download_file(package["url"], archive_path)
                 with zipfile.ZipFile(archive_path) as archive:
                     safe_extract(archive, model_dir)
 
@@ -180,6 +232,10 @@ def main() -> int:
                 }
             )
             print(f"[ok] {category}: {scene}")
+
+            # Avoid rapidly exhausting Sketchfab's per-user API allowance.
+            if index < len(rows) - 1:
+                time.sleep(1.0)
         except Exception as error:
             status.append(
                 {"category": category, "status": "error", "error": str(error)}
