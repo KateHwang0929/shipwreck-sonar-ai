@@ -49,7 +49,7 @@ jobs:
       - name: Install Blender runtime and NumPy
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender libgl1-mesa-dri libegl1
+          sudo apt-get install -y blender libgl1-mesa-dri libegl1 git-lfs
           rm -rf "$BLENDER_PYTHON_LIBS"
           python -m pip install \
             --only-binary=:all: \
@@ -95,10 +95,15 @@ jobs:
             --catalog "3d modeling/non_shipwreck_object_catalog/model_catalog.csv" \
             --overwrite
 
-      - name: Validate generated assets
+      - name: Validate, stage, commit, and push generated assets
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git lfs install --local
+
           python - <<'PY'
           import csv
+          import subprocess
           import sys
           from pathlib import Path
 
@@ -110,32 +115,39 @@ jobs:
               rows = list(csv.DictReader(stream))
 
           errors = []
+          stage_paths = []
+
           for row in rows:
-              fbx = root / row["target_fbx"]
-              png = root / row["target_preview"]
+              category = row["category"]
+              fbx_rel = row["target_fbx"]
+              png_rel = row["target_preview"]
+              attribution_rel = f"3d modeling/{category}/ATTRIBUTION.md"
+
+              fbx = root / fbx_rel
+              png = root / png_rel
+              attribution = root / attribution_rel
 
               if not fbx.is_file() or fbx.stat().st_size < 1024:
-                  errors.append(f"{row['category']}: missing or empty FBX: {fbx}")
+                  errors.append(f"{category}: missing or empty FBX: {fbx_rel}")
               else:
                   with fbx.open("rb") as stream:
-                      fbx_header = stream.read(23)
-                  if not fbx_header.startswith(b"Kaydara FBX Binary"):
-                      errors.append(
-                          f"{row['category']}: FBX does not have a binary FBX header"
-                      )
+                      if not stream.read(23).startswith(b"Kaydara FBX Binary"):
+                          errors.append(f"{category}: invalid binary FBX header: {fbx_rel}")
 
               if not png.is_file() or png.stat().st_size < 256:
-                  errors.append(f"{row['category']}: missing or empty PNG: {png}")
+                  errors.append(f"{category}: missing or empty PNG: {png_rel}")
               else:
                   with png.open("rb") as stream:
-                      png_header = stream.read(8)
-                  if png_header != b"\x89PNG\r\n\x1a\n":
-                      errors.append(
-                          f"{row['category']}: preview does not have a PNG header"
-                      )
+                      if stream.read(8) != b"\x89PNG\r\n\x1a\n":
+                          errors.append(f"{category}: invalid PNG header: {png_rel}")
+
+              if not attribution.is_file():
+                  errors.append(f"{category}: missing attribution: {attribution_rel}")
+
+              stage_paths.extend([fbx_rel, png_rel, attribution_rel])
 
           if not report.is_file():
-              errors.append(f"missing validation report: {report}")
+              errors.append(f"missing validation report: {report.relative_to(root)}")
           else:
               with report.open(newline="", encoding="utf-8") as stream:
                   report_rows = list(csv.DictReader(stream))
@@ -144,7 +156,7 @@ jobs:
                   status = report_by_category.get(row["category"], {}).get("status")
                   if status not in {"ok", "review_materials"}:
                       errors.append(
-                          f"{row['category']}: validation status is {status!r}"
+                          f"{row['category']}: conversion status is {status!r}"
                       )
 
           if errors:
@@ -152,45 +164,31 @@ jobs:
                   print(f"::error::{error}")
               sys.exit(1)
 
-          print(f"Validated {len(rows)} FBX files and {len(rows)} PNG previews.")
-          PY
+          for path in stage_paths:
+              subprocess.run(["git", "add", "--", path], check=True)
 
-      - name: Remove temporary files
-        if: always()
-        run: |
-          rm -rf "3d modeling/non_shipwreck_object_catalog/downloads"
-          rm -rf "$BLENDER_PYTHON_LIBS"
-
-      - name: Commit generated assets to catalog branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git lfs install --local
-
-          python - <<'PY'
-          import csv
-          import subprocess
-          from pathlib import Path
-
-          catalog = Path("3d modeling/non_shipwreck_object_catalog/model_catalog.csv")
-          with catalog.open(newline="", encoding="utf-8-sig") as stream:
-              rows = list(csv.DictReader(stream))
-
-          files = []
-          for row in rows:
-              files.extend(
-                  [
-                      row["target_fbx"],
-                      row["target_preview"],
-                      f"3d modeling/{row['category']}/ATTRIBUTION.md",
-                  ]
-              )
-          files.append(
-              "3d modeling/non_shipwreck_object_catalog/validation_report.csv"
+          subprocess.run(
+              [
+                  "git",
+                  "add",
+                  "--force",
+                  "--",
+                  "3d modeling/non_shipwreck_object_catalog/validation_report.csv",
+              ],
+              check=True,
           )
-          subprocess.run(["git", "add", "--", *files], check=True)
+
+          attributes = root / ".gitattributes"
+          if attributes.is_file():
+              subprocess.run(["git", "add", "--", ".gitattributes"], check=True)
+
+          print(
+              f"Validated and staged {len(rows)} FBX files, "
+              f"{len(rows)} PNG previews, and {len(rows)} attribution files."
+          )
           PY
 
+          git status --short
           git lfs ls-files
 
           if git diff --cached --quiet; then
@@ -206,7 +204,13 @@ jobs:
           {
             echo "## Non-shipwreck object catalog populated"
             echo
-            echo "- Generated 16 FBX models"
-            echo "- Generated 16 transparent PNG previews"
+            echo "- Generated and validated 16 FBX models"
+            echo "- Generated and validated 16 transparent PNG previews"
             echo "- Committed outputs to \`add-underwater-object-catalog\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary files
+        if: always()
+        run: |
+          rm -rf "3d modeling/non_shipwreck_object_catalog/downloads"
+          rm -rf "$BLENDER_PYTHON_LIBS"
