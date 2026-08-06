@@ -1,0 +1,112 @@
+name: Populate non-shipwreck 3D models
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  populate-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install downloader dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r "3d modeling/non_shipwreck_object_catalog/requirements.txt"
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+          blender --version
+
+      - name: Verify Sketchfab secret
+        env:
+          SKETCHFAB_TOKEN: ${{ secrets.SKETCHFAB_TOKEN }}
+        run: |
+          if [ -z "$SKETCHFAB_TOKEN" ]; then
+            echo "::error::Repository secret SKETCHFAB_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Download Sketchfab models
+        env:
+          SKETCHFAB_TOKEN: ${{ secrets.SKETCHFAB_TOKEN }}
+        run: |
+          python "3d modeling/non_shipwreck_object_catalog/download_sketchfab_models.py" \
+            --repo-root . \
+            --catalog "3d modeling/non_shipwreck_object_catalog/model_catalog.csv"
+
+      - name: Convert models to FBX and render previews
+        run: |
+          blender --background \
+            --python "3d modeling/non_shipwreck_object_catalog/blender_convert_and_render.py" \
+            -- \
+            --repo-root . \
+            --catalog "3d modeling/non_shipwreck_object_catalog/model_catalog.csv" \
+            --overwrite
+
+      - name: Remove temporary downloads
+        run: rm -rf "3d modeling/non_shipwreck_object_catalog/downloads"
+
+      - name: Commit generated assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- \
+            "3d modeling/rock/original_models/rock.fbx" \
+            "3d modeling/rock/preview_images/rock.png" \
+            "3d modeling/moss_clump/original_models/moss_clump.fbx" \
+            "3d modeling/moss_clump/preview_images/moss_clump.png" \
+            "3d modeling/mud_pile/original_models/mud_pile.fbx" \
+            "3d modeling/mud_pile/preview_images/mud_pile.png" \
+            "3d modeling/driftwood/original_models/driftwood.fbx" \
+            "3d modeling/driftwood/preview_images/driftwood.png" \
+            "3d modeling/seashell/original_models/seashell.fbx" \
+            "3d modeling/seashell/preview_images/seashell.png" \
+            "3d modeling/concrete_block/original_models/concrete_block.fbx" \
+            "3d modeling/concrete_block/preview_images/concrete_block.png" \
+            "3d modeling/brick/original_models/brick.fbx" \
+            "3d modeling/brick/preview_images/brick.png" \
+            "3d modeling/metal_pipe/original_models/metal_pipe.fbx" \
+            "3d modeling/metal_pipe/preview_images/metal_pipe.png" \
+            "3d modeling/concrete_pipe/original_models/concrete_pipe.fbx" \
+            "3d modeling/concrete_pipe/preview_images/concrete_pipe.png" \
+            "3d modeling/glass_bottle/original_models/glass_bottle.fbx" \
+            "3d modeling/glass_bottle/preview_images/glass_bottle.png" \
+            "3d modeling/anchor/original_models/anchor.fbx" \
+            "3d modeling/anchor/preview_images/anchor.png" \
+            "3d modeling/rope/original_models/rope.fbx" \
+            "3d modeling/rope/preview_images/rope.png" \
+            "3d modeling/plastic_crate/original_models/plastic_crate.fbx" \
+            "3d modeling/plastic_crate/preview_images/plastic_crate.png" \
+            "3d modeling/iron_chain/original_models/iron_chain.fbx" \
+            "3d modeling/iron_chain/preview_images/iron_chain.png" \
+            "3d modeling/ship_propeller/original_models/ship_propeller.fbx" \
+            "3d modeling/ship_propeller/preview_images/ship_propeller.png" \
+            "3d modeling/dead_coral/original_models/dead_coral.fbx" \
+            "3d modeling/dead_coral/preview_images/dead_coral.png" \
+            "3d modeling/non_shipwreck_object_catalog/validation_report.csv"
+
+          if git diff --cached --quiet; then
+            echo "No generated asset changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Populate non-shipwreck Sketchfab models"
+          git push origin "HEAD:${{ github.ref_name }}"
